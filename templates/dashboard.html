@@ -1,0 +1,227 @@
+{% extends 'base.html' %}
+{% block title %}TaskFlow — Dashboard{% endblock %}
+
+{% block body %}
+<div class="app-layout">
+
+  <!-- ── SIDEBAR ───────────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">⚡</div>
+      <span>TaskFlow</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="/dashboard" class="nav-item active" id="nav-dashboard">
+        <span class="nav-icon">📊</span> Dashboard
+      </a>
+      <a href="#" class="nav-item" onclick="openModal()" id="nav-add">
+        <span class="nav-icon">➕</span> Add Task
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar">{{ current_user.username[0].upper() }}</div>
+        <div>
+          <p class="user-name">{{ current_user.username }}</p>
+          <p class="user-email">{{ current_user.email }}</p>
+        </div>
+      </div>
+      <a href="/logout" class="btn btn-ghost btn-full">Logout</a>
+    </div>
+  </aside>
+
+  <!-- ── MAIN CONTENT ──────────────────────────────────────────────── -->
+  <main class="main-content">
+
+    <!-- Top bar -->
+    <header class="topbar">
+      <div>
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-subtitle">Welcome back, <strong>{{ current_user.username }}</strong>!</p>
+      </div>
+      <div class="topbar-right">
+        <!-- WebSocket status -->
+        <div class="ws-badge" id="wsBadge">
+          <span class="ws-dot"></span>
+          <span id="wsStatus">Connecting…</span>
+        </div>
+        <button class="btn btn-primary" onclick="openModal()" id="btn-add-task">+ New Task</button>
+      </div>
+    </header>
+
+    <!-- ── ANALYTICS CARDS ──────────────────────────────────────────── -->
+    <section class="analytics-grid" id="analyticsGrid">
+      <div class="stat-card stat-total">
+        <div class="stat-icon">📋</div>
+        <div class="stat-info">
+          <p class="stat-label">Total Tasks</p>
+          <h2 class="stat-value" id="stat-total">{{ analytics.total_tasks }}</h2>
+        </div>
+      </div>
+      <div class="stat-card stat-completed">
+        <div class="stat-icon">✅</div>
+        <div class="stat-info">
+          <p class="stat-label">Completed</p>
+          <h2 class="stat-value" id="stat-completed">{{ analytics.completed_tasks }}</h2>
+        </div>
+      </div>
+      <div class="stat-card stat-pending">
+        <div class="stat-icon">⏳</div>
+        <div class="stat-info">
+          <p class="stat-label">Pending</p>
+          <h2 class="stat-value" id="stat-pending">{{ analytics.pending_tasks }}</h2>
+        </div>
+      </div>
+      <div class="stat-card stat-pct">
+        <div class="stat-icon">🎯</div>
+        <div class="stat-info">
+          <p class="stat-label">Completion %</p>
+          <h2 class="stat-value" id="stat-pct">{{ analytics.completion_percentage }}%</h2>
+        </div>
+      </div>
+    </section>
+
+    <!-- Progress bar -->
+    <div class="progress-section">
+      <div class="progress-header">
+        <span>Overall Progress</span>
+        <span id="progress-label">{{ analytics.completion_percentage }}%</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill" style="width: {{ analytics.completion_percentage }}%"></div>
+      </div>
+    </div>
+
+    <!-- ── PRIORITY BREAKDOWN ──────────────────────────────────────── -->
+    <section class="breakdown-section">
+      <h3 class="section-title">Priority Breakdown</h3>
+      <div class="breakdown-grid">
+        <div class="breakdown-item priority-high">
+          <span class="breakdown-dot"></span>
+          <span class="breakdown-label">High</span>
+          <span class="breakdown-count" id="bp-high">{{ analytics.priority_breakdown.high }}</span>
+        </div>
+        <div class="breakdown-item priority-medium">
+          <span class="breakdown-dot"></span>
+          <span class="breakdown-label">Medium</span>
+          <span class="breakdown-count" id="bp-medium">{{ analytics.priority_breakdown.medium }}</span>
+        </div>
+        <div class="breakdown-item priority-low">
+          <span class="breakdown-dot"></span>
+          <span class="breakdown-label">Low</span>
+          <span class="breakdown-count" id="bp-low">{{ analytics.priority_breakdown.low }}</span>
+        </div>
+        <div class="breakdown-item status-progress">
+          <span class="breakdown-dot"></span>
+          <span class="breakdown-label">In Progress</span>
+          <span class="breakdown-count" id="stat-inprogress">{{ analytics.in_progress_tasks }}</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── TASK LIST ─────────────────────────────────────────────────── -->
+    <section class="tasks-section">
+      <div class="tasks-header">
+        <h3 class="section-title">All Tasks</h3>
+        <div class="task-filters">
+          <select id="filterStatus" onchange="filterTasks()" class="filter-select">
+            <option value="all">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="in_progress">In Progress</option>
+            <option value="completed">Completed</option>
+          </select>
+          <select id="filterPriority" onchange="filterTasks()" class="filter-select">
+            <option value="all">All Priority</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="task-list" id="taskList">
+        {% for task in tasks %}
+        <div class="task-card" data-id="{{ task.id }}" data-status="{{ task.status }}" data-priority="{{ task.priority }}" id="task-{{ task.id }}">
+          <div class="task-left">
+            <button class="task-check {% if task.status == 'completed' %}checked{% endif %}"
+                    onclick="toggleStatus({{ task.id }}, '{{ task.status }}')"
+                    id="check-{{ task.id }}"
+                    title="Toggle complete">
+              {% if task.status == 'completed' %}✓{% else %}○{% endif %}
+            </button>
+            <div class="task-body">
+              <p class="task-title {% if task.status == 'completed' %}strikethrough{% endif %}" id="title-{{ task.id }}">{{ task.title }}</p>
+              {% if task.description %}
+                <p class="task-desc" id="desc-{{ task.id }}">{{ task.description }}</p>
+              {% endif %}
+              <div class="task-meta">
+                <span class="badge badge-priority-{{ task.priority }}">{{ task.priority }}</span>
+                <span class="badge badge-status-{{ task.status }}">{{ task.status.replace('_', ' ') }}</span>
+                <span class="task-date">{{ task.created_date.strftime('%b %d, %Y') }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="task-actions">
+            <button class="btn-icon" onclick="openEditModal({{ task.id }}, '{{ task.title }}', '{{ task.description }}', '{{ task.priority }}', '{{ task.status }}')" title="Edit task" id="edit-{{ task.id }}">✏️</button>
+            <button class="btn-icon btn-danger" onclick="deleteTask({{ task.id }})" title="Delete task" id="delete-{{ task.id }}">🗑️</button>
+          </div>
+        </div>
+        {% else %}
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon">📝</div>
+          <p>No tasks yet. Click <strong>+ New Task</strong> to get started!</p>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ── ADD TASK MODAL ────────────────────────────────────────────────── -->
+<div class="modal-overlay hidden" id="addModal" onclick="closeModal(event)">
+  <div class="modal" id="addModalBox">
+    <div class="modal-header">
+      <h2 id="modalTitle">New Task</h2>
+      <button class="modal-close" onclick="closeModal()" id="btn-close-modal">✕</button>
+    </div>
+    <form id="taskForm" onsubmit="submitTask(event)">
+      <input type="hidden" id="editTaskId" value=""/>
+      <div class="form-group">
+        <label for="taskTitle">Title *</label>
+        <input type="text" id="taskTitle" name="title" placeholder="Task title" required/>
+      </div>
+      <div class="form-group">
+        <label for="taskDesc">Description</label>
+        <textarea id="taskDesc" name="description" rows="3" placeholder="Optional description…"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="taskPriority">Priority</label>
+          <select id="taskPriority" name="priority">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="taskStatus">Status</label>
+          <select id="taskStatus" name="status">
+            <option value="pending" selected>Pending</option>
+            <option value="in_progress">In Progress</option>
+            <option value="completed">Completed</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal()" id="btn-cancel-modal">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="btn-submit-task">Add Task</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Toast Notification -->
+<div class="toast hidden" id="toast"></div>
+{% endblock %}
